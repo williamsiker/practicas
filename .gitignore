@@ -1,0 +1,55 @@
+# ------------------------
+# Laravel backend
+# ------------------------
+backend/vendor
+backend/node_modules
+backend/.env*
+backend/storage/*
+!backend/storage/app/public
+backend/public/build
+backend/public/hot
+backend/public/storage
+backend/.phpunit.cache
+backend/.phpunit.result.cache
+backend/.phpactor.json
+backend/Homestead.json
+backend/Homestead.yaml
+backend/npm-debug.log
+backend/yarn-error.log
+backend/auth.json
+
+# IDEs y editores
+backend/.idea
+backend/.vscode
+backend/.fleet
+backend/.nova
+backend/.zed
+
+# ------------------------
+# Vue.js frontend
+# ------------------------
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/logs
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/lerna-debug.log*
+frontend/*.local
+
+# IDEs y editores
+frontend/.vscode/*
+frontend/!.vscode/extensions.json
+frontend/.idea
+
+# ------------------------
+# MySQL data
+# ------------------------
+mysql/data/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
