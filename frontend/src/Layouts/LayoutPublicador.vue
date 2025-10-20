@@ -56,7 +56,7 @@
             </router-link>
           </a-menu-item>
 
-          <a-sub-menu v-else :key="item.key">
+          <a-sub-menu v-else :key="item.key ">
             <template #icon>
               <component :is="item.icon" class="menu-icon" />
             </template>
@@ -132,7 +132,7 @@ const menuItems = [
     icon: SettingFilled,
     label: "Vistas",
     children: [
-      { key: "pagina1", icon: SettingFilled, label: "Pagina 1", route: "/publicador/pagina1" }
+      { key: "servicios", icon: SettingFilled, label: "Servicios", route: "/publicador/servicios" }
     ],
   },
   // {

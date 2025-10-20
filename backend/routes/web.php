@@ -7,5 +7,5 @@ Route::get('/', function () {
 });
 
 Route::prefix('api')->group(function () {
-    Route::get('/test', fn() => response()->json(['message'=>'testt']));
+   // Route::get('/test', fn() => response()->json(['message'=>'testt']));
 });

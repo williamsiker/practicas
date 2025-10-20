@@ -56,7 +56,7 @@
             </router-link>
           </a-menu-item>
 
-          <a-sub-menu v-else :key="item.key">
+          <a-sub-menu v-else :key="item.key ">
             <template #icon>
               <component :is="item.icon" class="menu-icon" />
             </template>
@@ -104,6 +104,8 @@ import {
   SettingFilled,
   MenuFoldOutlined,
   FileTextOutlined,
+  EyeFilled,
+  BulbOutlined,
 } from "@ant-design/icons-vue";
 
 const collapsed = ref(false);
@@ -128,11 +130,12 @@ const procesos = ref([
 const menuItems = [
   { key: "dashboard", icon: AppstoreFilled, label: "Dashboard", route: "/consumidor/dashboard" },
   {
-    key: "paginas",
-    icon: SettingFilled,
+    key: "catalogo-grupo",
+    icon: EyeFilled,
     label: "Vistas",
     children: [
-      { key: "pagina1", icon: SettingFilled, label: "Pagina 1", route: "/consumidor/pagina1" }
+      { key: "catalogo", icon: FileTextOutlined, label: "Catalogo", route: "/consumidor/catalogo" },
+      { key: "mis-servicios", icon: BulbOutlined, label: "Mis servicios", route: "/consumidor/mis-servicios" }
     ],
   },
   // {

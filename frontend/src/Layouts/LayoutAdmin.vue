@@ -136,8 +136,8 @@ const menuItems = [
     icon: SettingFilled,
     label: "Configuración",
     children: [
-      //{ key: "vacantes", icon: SettingFilled, label: "Vacantes", route: "/vacantes" },
       { key: "tarifas", icon: SettingFilled, label: "Tarifas", route: "/admin/tarifas" },
+      { key: "servicios", icon: FileTextOutlined, label: "Aprobación de servicios", route: "/admin/servicios" },
     ],
   },
   {
