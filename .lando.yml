@@ -1,0 +1,20 @@
+name: plataformapide
+recipe: laravel
+config:
+  webroot: backend/public
+  database: mariadb:11.4
+services:
+  node:
+    type: node:22
+    build_as_root:
+      - cd frontend && npm install
+    overrides:
+      command:
+        - sh
+        - "-c"
+        - cd frontend && npm run dev --host
+      dns:
+        - 8.8.8.8
+        - 1.1.1.1
+    ports:
+      - "5174:5173"
