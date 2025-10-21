@@ -146,20 +146,8 @@ class ServiceCatalogController extends Controller
 
             $paginatedServices = array_slice($services, $offset, $perPage);
 
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'services' => $paginatedServices,
-                    'pagination' => [
-                        'current_page' => (int) $page,
-                        'per_page' => (int) $perPage,
-                        'total' => $total,
-                        'last_page' => (int) ceil($total / $perPage),
-                        'has_next_page' => $page < ceil($total / $perPage),
-                        'has_prev_page' => $page > 1,
-                    ],
-                ],
-            ]);
+            // Return services directly for frontend compatibility
+            return response()->json($paginatedServices);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -202,6 +190,45 @@ class ServiceCatalogController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Failed to fetch service details',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Create a service request from a consumer
+     */
+    public function createServiceRequest(Request $request, $slug, $versionId)
+    {
+        try {
+            // Validate request data
+            $validatedData = $request->validate([
+                'schedule' => 'required|string|in:office,full,custom',
+                'customStart' => 'nullable|string',
+                'customEnd' => 'nullable|string',
+                'monthlyLimit' => 'required|integer|min:1',
+                'notes' => 'nullable|string',
+            ]);
+
+            // For now, just return success since we don't have user authentication yet
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Service request created successfully',
+                'data' => [
+                    'id' => rand(1000, 9999),
+                    'serviceSlug' => $slug,
+                    'versionId' => $versionId,
+                    'schedule' => $validatedData['schedule'],
+                    'monthlyLimit' => $validatedData['monthlyLimit'],
+                    'notes' => $validatedData['notes'] ?? null,
+                    'status' => 'pending',
+                    'createdAt' => now()->toISOString(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to create service request',
                 'error' => $e->getMessage(),
             ], 500);
         }

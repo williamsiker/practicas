@@ -43,8 +43,8 @@ Route::prefix('admin')->group(function () {
     });
     // Rutas que espera el frontend de admin
     Route::get('/services/pending', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'index']);
-    Route::post('/services/approve/{slug_param}', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'approve']);
-    Route::post('/services/reject/{slug_param}', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'reject']);
+    Route::post('/services/{slug}/approve', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'approve']);
+    Route::post('/services/{slug}/reject', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'reject']);
 });
 
 // PHASE 3: Service Management and Publication (Publisher side)
@@ -62,4 +62,10 @@ Route::prefix('publicador')->group(function () {
     Route::get('/services', [\App\Http\Controllers\Api\PublisherServiceController::class, 'index']);
     Route::post('/services', [\App\Http\Controllers\Api\PublisherServiceController::class, 'store']);
     Route::post('/services/{slug}/duplicate', [\App\Http\Controllers\Api\PublisherServiceController::class, 'duplicate']);
+});
+
+// Rutas específicas para el frontend de consumidor
+Route::prefix('consumidor')->group(function () {
+    Route::get('/services', [\App\Http\Controllers\Api\ServiceCatalogController::class, 'getServiceCatalog']);
+    Route::post('/services/{slug}/versions/{versionId}/requests', [\App\Http\Controllers\Api\ServiceCatalogController::class, 'createServiceRequest']);
 });
