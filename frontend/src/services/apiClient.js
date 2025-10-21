@@ -18,6 +18,26 @@ const buildUrl = (path = '') => {
   return `${normalizedBaseUrl}${normalizedPath}`
 }
 
+const shouldSendCredentials = () => {
+  if (!normalizedBaseUrl) {
+    return true
+  }
+
+  if (typeof window === 'undefined' || !window.location) {
+    return false
+  }
+
+  try {
+    const target = new URL(normalizedBaseUrl)
+    return target.origin === window.location.origin
+  } catch (error) {
+    console.warn('No se pudo analizar la URL base de la API:', error)
+    return false
+  }
+}
+
+const defaultCredentials = shouldSendCredentials() ? 'same-origin' : 'omit'
+
 export const apiFetch = (path, options = {}) => {
   const url = buildUrl(path)
   const headers = {
@@ -27,7 +47,7 @@ export const apiFetch = (path, options = {}) => {
   }
 
   const finalOptions = {
-    credentials: options.credentials ?? 'include',
+    credentials: options.credentials ?? defaultCredentials,
     ...options,
     headers,
   }
