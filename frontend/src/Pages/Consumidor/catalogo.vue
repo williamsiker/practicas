@@ -259,6 +259,7 @@
 import { computed, reactive, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import Layout from '../../Layouts/LayoutConsumidor.vue'
+import { apiFetch } from '../../services/apiClient'
 
 const loading = ref(false)
 const submittingRequest = ref(false)
@@ -315,7 +316,7 @@ const requestForm = reactive({
 const fetchServices = async () => {
   try {
     loading.value = true
-    const response = await fetch('/api/consumidor/services')
+    const response = await apiFetch('/api/consumidor/services')
     if (!response.ok) throw new Error('No se pudo cargar el catálogo.')
     const payload = await response.json()
     const list = Array.isArray(payload) ? payload : payload.data ?? []
@@ -480,7 +481,7 @@ const submitRequest = async () => {
 
   try {
     submittingRequest.value = true
-    const response = await fetch(
+    const response = await apiFetch(
       `/api/consumidor/services/${selectedService.value.slug}/versions/${selectedVersion.value.id}/requests`,
       {
         method: 'POST',

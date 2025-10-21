@@ -203,6 +203,7 @@
 import { onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import Layout from '../../Layouts/LayoutAdmin.vue'
+import { apiFetch } from '../../services/apiClient'
 
 const pendingServices = ref([])
 const loading = ref(false)
@@ -278,7 +279,7 @@ const closeDetail = () => {
 const fetchPending = async () => {
   try {
     loading.value = true
-    const response = await fetch('/api/admin/services/pending')
+    const response = await apiFetch('/api/admin/services/pending')
     if (!response.ok) throw new Error('No se pudo obtener la lista de servicios.')
     const data = await response.json()
     pendingServices.value = Array.isArray(data) ? data : data.data ?? []
@@ -302,7 +303,7 @@ const approve = async (service) => {
   approving.value.add(service.id)
 
   try {
-    const response = await fetch(`/api/admin/services/${service.slug}/approve`, {
+    const response = await apiFetch(`/api/admin/services/${service.slug}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     })
@@ -327,7 +328,7 @@ const reject = async (service) => {
   rejecting.value.add(service.id)
 
   try {
-    const response = await fetch(`/api/admin/services/${service.slug}/reject`, {
+    const response = await apiFetch(`/api/admin/services/${service.slug}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     })
