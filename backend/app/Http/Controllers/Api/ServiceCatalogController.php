@@ -3,43 +3,49 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\EnhancedService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 class ServiceCatalogController extends Controller
 {
     /**
-     * Get all available filters for the service catalog
+     * Get all available filters for the service catalog.
      */
     public function getAvailableFilters()
     {
         try {
-            // Load services from JSON file
-            $services = $this->loadServicesFromJson();
+            $services = $this->getCatalogDataset();
 
-            // Get unique categories
-            $categories = array_values(array_unique(array_column($services, 'category')));
+            $categories = array_values(array_filter(array_unique(array_map(
+                fn ($service) => $service['category'] ?? null,
+                $services
+            ))));
 
-            // Get price ranges
+            $statusOptions = array_map(
+                fn ($status) => [
+                    'value' => $status,
+                    'label' => Str::ucfirst($status),
+                ],
+                array_values(array_unique(array_map(
+                    fn ($service) => $service['status'] ?? 'aprobado',
+                    $services
+                )))
+            );
+
             $priceRanges = [
-                ['label' => 'Free', 'min' => 0, 'max' => 0],
+                ['label' => 'Gratis', 'min' => 0, 'max' => 0],
                 ['label' => '1 - 50', 'min' => 1, 'max' => 50],
                 ['label' => '51 - 100', 'min' => 51, 'max' => 100],
                 ['label' => '101 - 500', 'min' => 101, 'max' => 500],
                 ['label' => '500+', 'min' => 500, 'max' => null],
             ];
 
-            // Service status options
-            $statusOptions = [
-                ['value' => 'active', 'label' => 'Active'],
-                ['value' => 'maintenance', 'label' => 'Maintenance'],
-                ['value' => 'inactive', 'label' => 'Inactive'],
-            ];
-
-            // Request limit filters
             $requestLimits = [
-                ['label' => 'Up to 1,000/day', 'max_daily' => 1000],
-                ['label' => '1,000 - 10,000/day', 'max_daily' => 10000],
-                ['label' => '10,000+/day', 'max_daily' => null],
+                ['label' => 'Hasta 1,000 / día', 'max_daily' => 1000],
+                ['label' => '1,000 - 10,000 / día', 'max_daily' => 10000],
+                ['label' => '10,000+ / día', 'max_daily' => null],
             ];
 
             return response()->json([
@@ -61,92 +67,86 @@ class ServiceCatalogController extends Controller
     }
 
     /**
-     * Get filtered service catalog with pagination
+     * Get filtered service catalog with pagination.
      */
     public function getServiceCatalog(Request $request)
     {
         try {
-            // Load all services from JSON file
-            $allServices = $this->loadServicesFromJson();
-            $services = $allServices;
+            $services = $this->getCatalogDataset();
 
-            // Apply filters
-            if ($request->has('category') && ! empty($request->category)) {
-                $services = array_filter($services, function ($service) use ($request) {
-                    return $service['category'] === $request->category;
-                });
+            if ($request->filled('category')) {
+                $category = Str::lower($request->category);
+                $services = array_filter($services, fn ($service) => Str::lower($service['category'] ?? '') === $category);
             }
 
-            if ($request->has('status') && ! empty($request->status)) {
-                $services = array_filter($services, function ($service) use ($request) {
-                    return $service['status'] === $request->status;
-                });
+            if ($request->filled('status')) {
+                $status = Str::lower($request->status);
+                $services = array_filter($services, fn ($service) => Str::lower($service['status'] ?? '') === $status);
             }
 
-            // Price range filter
-            if ($request->has('min_price')) {
-                $services = array_filter($services, function ($service) use ($request) {
-                    return $service['base_price'] >= $request->min_price;
-                });
-            }
-            if ($request->has('max_price') && $request->max_price !== null) {
-                $services = array_filter($services, function ($service) use ($request) {
-                    return $service['base_price'] <= $request->max_price;
-                });
+            if ($request->filled('tag')) {
+                $tag = $request->tag;
+                $services = array_filter($services, fn ($service) => in_array($tag, $service['tags'] ?? []));
             }
 
-            // Request limit filter
-            if ($request->has('min_daily_requests')) {
-                $services = array_filter($services, function ($service) use ($request) {
-                    return $service['max_requests_per_day'] >= $request->min_daily_requests;
-                });
-            }
-            if ($request->has('max_daily_requests') && $request->max_daily_requests !== null) {
-                $services = array_filter($services, function ($service) use ($request) {
-                    return $service['max_requests_per_day'] <= $request->max_daily_requests;
-                });
+            if ($request->filled('min_price')) {
+                $minPrice = (float) $request->min_price;
+                $services = array_filter($services, fn ($service) => ($service['basePrice'] ?? 0) >= $minPrice);
             }
 
-            // Search by name or description
-            if ($request->has('search') && ! empty($request->search)) {
-                $search = strtolower($request->search);
+            if ($request->filled('max_price')) {
+                $maxPrice = (float) $request->max_price;
+                $services = array_filter($services, fn ($service) => ($service['basePrice'] ?? 0) <= $maxPrice);
+            }
+
+            if ($request->filled('min_daily_requests')) {
+                $minDaily = (int) $request->min_daily_requests;
+                $services = array_filter($services, fn ($service) => ($service['maxRequestsPerDay'] ?? 0) >= $minDaily);
+            }
+
+            if ($request->filled('max_daily_requests')) {
+                $maxDaily = (int) $request->max_daily_requests;
+                $services = array_filter($services, fn ($service) => ($service['maxRequestsPerDay'] ?? 0) <= $maxDaily);
+            }
+
+            if ($request->filled('search')) {
+                $search = Str::lower($request->search);
                 $services = array_filter($services, function ($service) use ($search) {
-                    return strpos(strtolower($service['name']), $search) !== false ||
-                           strpos(strtolower($service['description']), $search) !== false;
+                    return Str::contains(Str::lower($service['name'] ?? ''), $search)
+                        || Str::contains(Str::lower($service['description'] ?? ''), $search);
                 });
             }
 
-            // Sorting
+            $services = array_values($services);
+
             $sortBy = $request->get('sort_by', 'name');
-            $sortOrder = $request->get('sort_order', 'asc');
+            $sortOrder = Str::lower($request->get('sort_order', 'asc')) === 'desc' ? 'desc' : 'asc';
 
-            if (in_array($sortBy, ['name', 'category', 'base_price', 'created_at', 'status'])) {
+            $sortableFields = ['name', 'category', 'status', 'usage', 'basePrice', 'updatedAt'];
+
+            if (in_array($sortBy, $sortableFields, true)) {
                 usort($services, function ($a, $b) use ($sortBy, $sortOrder) {
-                    $aVal = $a[$sortBy];
-                    $bVal = $b[$sortBy];
+                    $aValue = $a[$sortBy] ?? null;
+                    $bValue = $b[$sortBy] ?? null;
 
-                    if ($sortBy === 'base_price') {
-                        $comparison = $aVal <=> $bVal;
+                    if (in_array($sortBy, ['basePrice', 'usage'], true)) {
+                        $comparison = ($aValue ?? 0) <=> ($bValue ?? 0);
+                    } elseif ($sortBy === 'updatedAt') {
+                        $comparison = strtotime($aValue ?? '') <=> strtotime($bValue ?? '');
                     } else {
-                        $comparison = strcasecmp($aVal, $bVal);
+                        $comparison = strcmp(Str::lower($aValue ?? ''), Str::lower($bValue ?? ''));
                     }
 
                     return $sortOrder === 'asc' ? $comparison : -$comparison;
                 });
             }
 
-            // Reset array keys
-            $services = array_values($services);
-            $total = count($services);
-
-            // Pagination
-            $perPage = min($request->get('per_page', 12), 50); // Max 50 per page
-            $page = $request->get('page', 1);
+            $perPage = (int) min(max($request->get('per_page', 12), 1), 50);
+            $page = (int) max($request->get('page', 1), 1);
             $offset = ($page - 1) * $perPage;
 
             $paginatedServices = array_slice($services, $offset, $perPage);
 
-            // Return services directly for frontend compatibility
             return response()->json($paginatedServices);
         } catch (\Exception $e) {
             return response()->json([
@@ -158,22 +158,14 @@ class ServiceCatalogController extends Controller
     }
 
     /**
-     * Get service details by ID
+     * Get service details by ID.
      */
     public function getServiceDetails($id)
     {
         try {
-            // Load services from JSON file
-            $services = $this->loadServicesFromJson();
+            $services = $this->getCatalogDataset();
 
-            // Find service by ID
-            $service = null;
-            foreach ($services as $s) {
-                if ($s['id'] == $id) {
-                    $service = $s;
-                    break;
-                }
-            }
+            $service = collect($services)->first(fn ($svc) => (int) ($svc['id'] ?? 0) === (int) $id);
 
             if (! $service) {
                 return response()->json([
@@ -182,10 +174,7 @@ class ServiceCatalogController extends Controller
                 ], 404);
             }
 
-            return response()->json([
-                'status' => 'success',
-                'data' => $service,
-            ]);
+            return response()->json($service);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -196,12 +185,11 @@ class ServiceCatalogController extends Controller
     }
 
     /**
-     * Create a service request from a consumer
+     * Create a service request from a consumer.
      */
     public function createServiceRequest(Request $request, $slug, $versionId)
     {
         try {
-            // Validate request data
             $validatedData = $request->validate([
                 'schedule' => 'required|string|in:office,full,custom',
                 'customStart' => 'nullable|string',
@@ -210,7 +198,6 @@ class ServiceCatalogController extends Controller
                 'notes' => 'nullable|string',
             ]);
 
-            // For now, just return success since we don't have user authentication yet
             return response()->json([
                 'status' => 'success',
                 'message' => 'Service request created successfully',
@@ -235,16 +222,16 @@ class ServiceCatalogController extends Controller
     }
 
     /**
-     * Load services from static JSON (Mock data)
+     * Load services from static JSON (Mock data).
      */
     public function loadMockServices()
     {
         try {
             return response()->json([
                 'status' => 'success',
-                'message' => 'Mock services are ready to use from static JSON file',
+                'message' => 'Mock services are ready to use from static dataset',
                 'data' => [
-                    'services_count' => 6,
+                    'services_count' => count($this->loadServicesFromJson()),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -256,19 +243,191 @@ class ServiceCatalogController extends Controller
         }
     }
 
-    /**
-     * Load mock services from JSON file
-     */
-    private function loadServicesFromJson()
+    private function getCatalogDataset(): array
     {
-        $filePath = storage_path('mock-services.json');
+        $services = EnhancedService::whereIn('status', ['ready_to_publish', 'published', 'active'])
+            ->orderByDesc('updated_at')
+            ->get()
+            ->map(fn (EnhancedService $service) => $this->transformEnhancedService($service))
+            ->all();
+
+        if (! empty($services)) {
+            return $services;
+        }
+
+        return $this->loadServicesFromJson();
+    }
+
+    private function loadServicesFromJson(): array
+    {
+        $filePath = base_path('database/data/mock-services.json');
 
         if (! file_exists($filePath)) {
-            return [];
+            return $this->fallbackServices();
         }
 
         $jsonContent = file_get_contents($filePath);
+        $decoded = json_decode($jsonContent, true);
 
-        return json_decode($jsonContent, true) ?: [];
+        if (! is_array($decoded)) {
+            return $this->fallbackServices();
+        }
+
+        return array_map(fn ($service) => $this->normalizeServicePayload($service), $decoded);
+    }
+
+    private function transformEnhancedService(EnhancedService $service): array
+    {
+        $metrics = $service->metrics_config ?? [];
+        $operational = $service->operational_config ?? [];
+
+        $schedule = Arr::get($operational, 'schedule')
+            ?? Arr::get($metrics, 'schedule', 'office');
+
+        $monthlyLimit = Arr::get($operational, 'monthly_limit')
+            ?? Arr::get($metrics, 'monthly_limit')
+            ?? $service->max_requests_per_month;
+
+        return [
+            'id' => $service->id,
+            'slug' => Str::slug($service->name . '-' . $service->id),
+            'name' => $service->name,
+            'description' => $service->description,
+            'department' => Arr::get($operational, 'department', 'Sin departamento'),
+            'category' => Arr::get($operational, 'category', 'Servicios digitales'),
+            'status' => $this->mapStatus($service->status),
+            'usage' => Arr::get($operational, 'usage', 0),
+            'coverage' => Arr::get($operational, 'coverage', 'No especificada'),
+            'url' => $service->url,
+            'type' => $this->mapMethodToType($service->method),
+            'typeLabel' => $this->mapTypeLabel($this->mapMethodToType($service->method)),
+            'authType' => $this->mapAuthType($service->auth_type),
+            'authTypeLabel' => $this->mapAuthLabel($service->auth_type),
+            'schedule' => $schedule,
+            'monthlyLimit' => $monthlyLimit,
+            'tags' => Arr::get($operational, 'tags', []),
+            'labels' => Arr::get($operational, 'labels', []),
+            'owner' => Arr::get($operational, 'owner', 'No asignado'),
+            'documentationUrl' => $service->documentation,
+            'termsAccepted' => (bool) $service->terms_accepted,
+            'currentVersion' => $service->version,
+            'updatedAt' => optional($service->updated_at ?? $service->created_at)->toISOString(),
+            'basePrice' => (float) $service->base_price,
+            'maxRequestsPerDay' => $service->max_requests_per_day,
+            'maxRequestsPerMonth' => $service->max_requests_per_month,
+            'versions' => [[
+                'id' => $service->id * 1000,
+                'version' => $service->version,
+                'status' => 'available',
+                'releaseDate' => optional($service->approved_at ?? $service->created_at)->toDateString(),
+                'compatibility' => Arr::get($operational, 'compatibility', 'N/A'),
+                'documentationUrl' => $service->documentation,
+                'requestable' => true,
+                'limitSuggestion' => $monthlyLimit,
+                'notes' => $service->documentation ? 'Documentación disponible.' : 'Sin notas adicionales.',
+            ]],
+        ];
+    }
+
+    private function normalizeServicePayload(array $service): array
+    {
+        $slug = $service['slug'] ?? Str::slug(($service['name'] ?? 'servicio') . '-' . ($service['id'] ?? Str::random(6)));
+        $updatedAt = $service['updatedAt'] ?? now()->toISOString();
+
+        $versions = [];
+        foreach ($service['versions'] ?? [] as $index => $version) {
+            $versions[] = [
+                'id' => $version['id'] ?? ($index + 1),
+                'version' => $version['version'] ?? '1.0.0',
+                'status' => $version['status'] ?? 'available',
+                'releaseDate' => $version['releaseDate'] ?? now()->toDateString(),
+                'compatibility' => $version['compatibility'] ?? 'N/A',
+                'documentationUrl' => $version['documentationUrl'] ?? $version['documentation'] ?? null,
+                'requestable' => $version['requestable'] ?? $version['is_requestable'] ?? true,
+                'limitSuggestion' => $version['limitSuggestion'] ?? null,
+                'notes' => $version['notes'] ?? null,
+            ];
+        }
+
+        return array_merge($service, [
+            'slug' => $slug,
+            'updatedAt' => $updatedAt,
+            'versions' => $versions,
+            'tags' => $service['tags'] ?? [],
+            'labels' => $service['labels'] ?? [],
+            'status' => $service['status'] ?? 'aprobado',
+            'usage' => $service['usage'] ?? 0,
+            'basePrice' => $service['basePrice'] ?? 0,
+            'maxRequestsPerDay' => $service['maxRequestsPerDay'] ?? 1000,
+            'maxRequestsPerMonth' => $service['maxRequestsPerMonth'] ?? 30000,
+        ]);
+    }
+
+    private function fallbackServices(): array
+    {
+        return [];
+    }
+
+    private function mapStatus(string $status): string
+    {
+        $mapping = [
+            'ready_to_publish' => 'aprobado',
+            'published' => 'aprobado',
+            'active' => 'aprobado',
+            'pending' => 'revision',
+            'draft' => 'borrador',
+            'maintenance' => 'mantenimiento',
+        ];
+
+        return $mapping[$status] ?? $status;
+    }
+
+    private function mapMethodToType(string $method): string
+    {
+        $mapping = [
+            'GET' => 'api-rest',
+            'POST' => 'form-web',
+            'PUT' => 'api-rest',
+            'PATCH' => 'api-rest',
+            'DELETE' => 'api-rest',
+        ];
+
+        return $mapping[strtoupper($method)] ?? 'api-rest';
+    }
+
+    private function mapTypeLabel(string $typeValue): string
+    {
+        $mapping = [
+            'api-rest' => 'API REST',
+            'form-web' => 'Formulario web',
+            'archivo-batch' => 'Archivo batch',
+            'proceso-manual' => 'Proceso manual',
+        ];
+
+        return $mapping[$typeValue] ?? $typeValue;
+    }
+
+    private function mapAuthType(string $authType): string
+    {
+        $mapping = [
+            'oauth' => 'oauth2',
+            'api_key' => 'api_key',
+            'token' => 'token',
+            'none' => 'ninguna',
+        ];
+
+        return $mapping[$authType] ?? $authType;
+    }
+
+    private function mapAuthLabel(string $authType): string
+    {
+        $mapping = [
+            'oauth' => 'OAuth 2.0',
+            'api_key' => 'API Key',
+            'token' => 'Token',
+            'none' => 'Sin autenticación',
+        ];
+
+        return $mapping[$authType] ?? $authType;
     }
 }

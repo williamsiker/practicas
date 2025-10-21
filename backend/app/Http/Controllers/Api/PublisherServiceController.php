@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EnhancedService;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -42,6 +43,7 @@ class PublisherServiceController extends Controller
 
             // Add service requests (pending, rejected, etc.)
             foreach ($serviceRequests as $request) {
+                $metrics = $request->metrics_config ?? [];
                 $services->push([
                     'id' => $request->id,
                     'slug' => Str::slug($request->name . '-' . $request->id),
@@ -50,8 +52,10 @@ class PublisherServiceController extends Controller
                     'url' => $request->url,
                     'type' => $this->mapMethodToType($request->method),
                     'status' => $this->mapStatus($request->status),
+                    'typeLabel' => $this->mapTypeLabel($this->mapMethodToType($request->method)),
                     'authType' => $this->mapAuthType($request->auth_type),
-                    'schedule' => 'office',
+                    'authTypeLabel' => $this->mapAuthLabel($request->auth_type),
+                    'schedule' => Arr::get($metrics, 'schedule', 'office'),
                     'monthlyLimit' => $request->max_requests_per_month,
                     'currentVersion' => $request->version,
                     'updatedAt' => $request->updated_at,
@@ -69,6 +73,8 @@ class PublisherServiceController extends Controller
 
             // Add enhanced services (approved, published, etc.)
             foreach ($enhancedServices as $service) {
+                $metrics = $service->metrics_config ?? [];
+                $operational = $service->operational_config ?? [];
                 $services->push([
                     'id' => $service->id,
                     'slug' => Str::slug($service->name . '-' . $service->id),
@@ -77,8 +83,11 @@ class PublisherServiceController extends Controller
                     'url' => $service->url,
                     'type' => $this->mapMethodToType($service->method),
                     'status' => $this->mapEnhancedStatus($service->status),
+                    'typeLabel' => $this->mapTypeLabel($this->mapMethodToType($service->method)),
                     'authType' => $this->mapAuthType($service->auth_type),
-                    'schedule' => 'office',
+                    'authTypeLabel' => $this->mapAuthLabel($service->auth_type),
+                    'schedule' => Arr::get($operational, 'schedule')
+                        ?? Arr::get($metrics, 'schedule', 'office'),
                     'monthlyLimit' => $service->max_requests_per_month,
                     'currentVersion' => $service->version,
                     'updatedAt' => $service->updated_at,
@@ -150,8 +159,10 @@ class PublisherServiceController extends Controller
                 'url' => $serviceRequest->url,
                 'type' => $this->mapMethodToType($serviceRequest->method),
                 'status' => $this->mapStatus($serviceRequest->status),
+                'typeLabel' => $this->mapTypeLabel($this->mapMethodToType($serviceRequest->method)),
                 'authType' => $this->mapAuthType($serviceRequest->auth_type),
-                'schedule' => 'office',
+                'authTypeLabel' => $this->mapAuthLabel($serviceRequest->auth_type),
+                'schedule' => Arr::get($serviceRequest->metrics_config, 'schedule', 'office'),
                 'monthlyLimit' => $serviceRequest->max_requests_per_month,
                 'currentVersion' => $serviceRequest->version,
                 'updatedAt' => $serviceRequest->updated_at,
@@ -224,6 +235,8 @@ class PublisherServiceController extends Controller
             }
 
             // Create duplicate service request
+            $duplicateMetrics = $originalService->metrics_config ?? $originalService->operational_config ?? [];
+
             $duplicateData = [
                 'name' => $originalService->name . ' (Copia)',
                 'description' => $originalService->description,
@@ -239,7 +252,7 @@ class PublisherServiceController extends Controller
                 'error_codes' => $originalService->error_codes,
                 'validations' => $originalService->validations,
                 'metrics_enabled' => $originalService->metrics_enabled,
-                'metrics_config' => $originalService->metrics_config,
+                'metrics_config' => $duplicateMetrics,
                 'has_demo' => $originalService->has_demo,
                 'demo_url' => $originalService->demo_url,
                 'base_price' => $originalService->base_price,
@@ -265,8 +278,10 @@ class PublisherServiceController extends Controller
                 'url' => $duplicate->url,
                 'type' => $this->mapMethodToType($duplicate->method),
                 'status' => 'borrador',
+                'typeLabel' => $this->mapTypeLabel($this->mapMethodToType($duplicate->method)),
                 'authType' => $this->mapAuthType($duplicate->auth_type),
-                'schedule' => 'office',
+                'authTypeLabel' => $this->mapAuthLabel($duplicate->auth_type),
+                'schedule' => Arr::get($duplicate->metrics_config, 'schedule', 'office'),
                 'monthlyLimit' => $duplicate->max_requests_per_month,
                 'currentVersion' => $duplicate->version,
                 'updatedAt' => $duplicate->updated_at,
@@ -306,7 +321,8 @@ class PublisherServiceController extends Controller
             'url' => 'required|url',
             'type' => 'required|string',
             'auth_type' => 'required|string',
-            'schedule' => 'required|string',
+            'schedule' => 'required|string|in:office,full',
+            'monthly_limit' => 'nullable|integer|min:0',
             'terms_accepted' => 'required|accepted',
             'version.version' => 'required|string|max:50',
         ];
@@ -319,6 +335,16 @@ class PublisherServiceController extends Controller
      */
     private function prepareServiceRequestData($data, $publisherId)
     {
+        $monthlyLimit = isset($data['monthly_limit']) && $data['monthly_limit'] !== null
+            ? (int) $data['monthly_limit']
+            : 0;
+        $maxRequestsPerMonth = max($monthlyLimit, 0);
+
+        $metricsConfig = [
+            'schedule' => $data['schedule'] ?? 'office',
+            'monthly_limit' => $monthlyLimit,
+        ];
+
         return [
             'name' => $data['name'],
             'description' => $data['short_description'],
@@ -330,7 +356,9 @@ class PublisherServiceController extends Controller
             'documentation' => $data['short_description'],
             'base_price' => 0,
             'max_requests_per_day' => 1000,
-            'max_requests_per_month' => $data['monthly_limit'] ?? 30000,
+            'max_requests_per_month' => $maxRequestsPerMonth,
+            'metrics_enabled' => $monthlyLimit > 0,
+            'metrics_config' => $metricsConfig,
             'justification' => 'Servicio solicitado desde plataforma PIDE',
             'terms_accepted' => $data['terms_accepted'],
             'terms_accepted_at' => now(),
@@ -347,7 +375,7 @@ class PublisherServiceController extends Controller
         $mapping = [
             'api-rest' => 'GET',
             'form-web' => 'POST',
-            'archivo-batch' => 'GET',
+            'archivo-batch' => 'POST',
             'proceso-manual' => 'POST',
         ];
 
@@ -359,13 +387,33 @@ class PublisherServiceController extends Controller
      */
     private function mapMethodToType($method)
     {
-        return 'api-rest';
+        $mapping = [
+            'GET' => 'api-rest',
+            'POST' => 'form-web',
+            'PUT' => 'api-rest',
+            'PATCH' => 'api-rest',
+            'DELETE' => 'api-rest',
+        ];
+
+        return $mapping[strtoupper($method)] ?? 'api-rest';
     }
 
     /**
      * Map auth type for frontend display
      */
     private function mapAuthType($authType)
+    {
+        $mapping = [
+            'oauth' => 'oauth2',
+            'api_key' => 'api_key',
+            'token' => 'token',
+            'none' => 'ninguna',
+        ];
+
+        return $mapping[$authType] ?? $authType;
+    }
+
+    private function mapAuthLabel($authType)
     {
         $mapping = [
             'oauth' => 'OAuth 2.0',
@@ -419,6 +467,18 @@ class PublisherServiceController extends Controller
         ];
 
         return $mapping[$status] ?? $status;
+    }
+
+    private function mapTypeLabel(string $typeValue): string
+    {
+        $mapping = [
+            'api-rest' => 'API REST',
+            'form-web' => 'Formulario web',
+            'archivo-batch' => 'Archivo batch',
+            'proceso-manual' => 'Proceso manual',
+        ];
+
+        return $mapping[$typeValue] ?? $typeValue;
     }
 
     /**

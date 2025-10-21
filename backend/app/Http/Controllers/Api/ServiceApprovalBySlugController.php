@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EnhancedService;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -36,16 +37,20 @@ class ServiceApprovalBySlugController extends Controller
 
             // Transform data to match frontend expectations
             $services = $pendingRequests->map(function ($request) {
+                $metrics = $request->metrics_config ?? [];
                 return [
                     'id' => $request->id,
                     'slug' => Str::slug($request->name . '-' . $request->id),
                     'name' => $request->name,
                     'description' => $request->description,
                     'type' => $this->mapMethodToType($request->method),
+                    'typeLabel' => $this->mapTypeLabel($this->mapMethodToType($request->method)),
                     'authType' => $this->mapAuthType($request->auth_type),
-                    'schedule' => 'office', // Default schedule
+                    'authTypeLabel' => $this->mapAuthLabel($request->auth_type),
+                    'schedule' => Arr::get($metrics, 'schedule', 'office'),
                     'monthlyLimit' => $request->max_requests_per_month,
                     'updatedAt' => $request->updated_at,
+                    'status' => 'revision',
                     'url' => $request->url,
                     'department' => $request->publisher->department ?? 'No asignado',
                     'category' => 'API REST',
@@ -217,6 +222,12 @@ class ServiceApprovalBySlugController extends Controller
      */
     private function createServiceFromRequest(ServiceRequest $serviceRequest, int $adminId): EnhancedService
     {
+        $metrics = $serviceRequest->metrics_config ?? [];
+        $operationalConfig = array_merge($metrics, [
+            'schedule' => Arr::get($metrics, 'schedule', 'office'),
+            'monthly_limit' => $serviceRequest->max_requests_per_month,
+        ]);
+
         $serviceData = [
             'name' => $serviceRequest->name,
             'description' => $serviceRequest->description,
@@ -235,7 +246,7 @@ class ServiceApprovalBySlugController extends Controller
             'error_codes' => $serviceRequest->error_codes,
             'validations' => $serviceRequest->validations,
             'metrics_enabled' => $serviceRequest->metrics_enabled,
-            'metrics_config' => $serviceRequest->metrics_config,
+            'metrics_config' => $metrics,
             'has_demo' => $serviceRequest->has_demo,
             'demo_url' => $serviceRequest->demo_url,
             'base_price' => $serviceRequest->base_price,
@@ -247,6 +258,7 @@ class ServiceApprovalBySlugController extends Controller
             'approved_at' => now(),
             'terms_accepted' => $serviceRequest->terms_accepted,
             'terms_accepted_at' => $serviceRequest->terms_accepted_at,
+            'operational_config' => $operationalConfig,
         ];
 
         return EnhancedService::create($serviceData);
@@ -275,19 +287,31 @@ class ServiceApprovalBySlugController extends Controller
     {
         $mapping = [
             'GET' => 'api-rest',
-            'POST' => 'api-rest',
+            'POST' => 'form-web',
             'PUT' => 'api-rest',
             'PATCH' => 'api-rest',
             'DELETE' => 'api-rest',
         ];
 
-        return $mapping[$method] ?? 'api-rest';
+        return $mapping[strtoupper($method)] ?? 'api-rest';
     }
 
     /**
      * Map auth type for frontend display
      */
     private function mapAuthType($authType)
+    {
+        $mapping = [
+            'oauth' => 'oauth2',
+            'api_key' => 'api_key',
+            'token' => 'token',
+            'none' => 'ninguna',
+        ];
+
+        return $mapping[$authType] ?? $authType;
+    }
+
+    private function mapAuthLabel($authType)
     {
         $mapping = [
             'oauth' => 'OAuth 2.0',
@@ -297,6 +321,18 @@ class ServiceApprovalBySlugController extends Controller
         ];
 
         return $mapping[$authType] ?? $authType;
+    }
+
+    private function mapTypeLabel(string $typeValue): string
+    {
+        $mapping = [
+            'api-rest' => 'API REST',
+            'form-web' => 'Formulario web',
+            'archivo-batch' => 'Archivo batch',
+            'proceso-manual' => 'Proceso manual',
+        ];
+
+        return $mapping[$typeValue] ?? $typeValue;
     }
 
     private function resolveAdminId(Request $request): ?int
