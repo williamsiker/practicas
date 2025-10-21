@@ -311,6 +311,7 @@
 import { computed, reactive, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import Layout from '../../Layouts/LayoutPublicador.vue'
+import { apiFetch } from '../../services/apiClient'
 
 const services = ref([])
 const loading = ref(false)
@@ -445,7 +446,7 @@ const summary = computed(() => {
 const fetchServices = async () => {
   try {
     loading.value = true
-    const response = await fetch('/api/publicador/services')
+    const response = await apiFetch('/api/publicador/services')
     if (!response.ok) throw new Error('No se pudo cargar la lista de servicios.')
     const payload = await response.json()
     const list = Array.isArray(payload) ? payload : payload.data ?? []
@@ -510,7 +511,7 @@ const submitPublish = async () => {
       },
     }
 
-    const response = await fetch('/api/publicador/services', {
+    const response = await apiFetch('/api/publicador/services', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -518,7 +519,15 @@ const submitPublish = async () => {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.message || 'No se pudo registrar el servicio.')
+      const validationMessage = Array.isArray(error?.errors)
+        ? error.errors.find(Boolean)
+        : error?.errors
+          ? Object.values(error.errors)
+              .flat()
+              .find(Boolean)
+          : null
+      const messageText = validationMessage || error.message || 'No se pudo registrar el servicio.'
+      throw new Error(messageText)
     }
 
     const created = await response.json()
@@ -535,7 +544,7 @@ const submitPublish = async () => {
 
 const duplicateService = async (service) => {
   try {
-    const response = await fetch(`/api/publicador/services/${service.slug}/duplicate`, {
+    const response = await apiFetch(`/api/publicador/services/${service.slug}/duplicate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
     })
