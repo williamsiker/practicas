@@ -519,7 +519,15 @@ const submitPublish = async () => {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
-      throw new Error(error.message || 'No se pudo registrar el servicio.')
+      const validationMessage = Array.isArray(error?.errors)
+        ? error.errors.find(Boolean)
+        : error?.errors
+          ? Object.values(error.errors)
+              .flat()
+              .find(Boolean)
+          : null
+      const messageText = validationMessage || error.message || 'No se pudo registrar el servicio.'
+      throw new Error(messageText)
     }
 
     const created = await response.json()
