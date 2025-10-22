@@ -2,61 +2,83 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Service extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'name',
-        'description',
+        'slug',
+        'short_description',
+        'department',
         'category',
+        'usage_count',
+        'coverage',
+        'url',
+        'type',
         'status',
-        'base_price',
-        'pricing_tiers',
-        'max_requests_per_day',
-        'max_requests_per_month',
-        'features',
-        'api_endpoint',
+        'auth_type',
+        'schedule',
+        'monthly_limit',
+        'tags',
+        'labels',
+        'owner',
         'documentation_url',
+        'terms_accepted',
+        'approved_at',
     ];
 
     protected $casts = [
-        'pricing_tiers' => 'array',
-        'features' => 'array',
-        'base_price' => 'decimal:2',
+        'tags' => 'array',
+        'labels' => 'array',
+        'terms_accepted' => 'boolean',
+        'approved_at' => 'datetime',
     ];
 
-    public function usages(): HasMany
+    protected static function booted(): void
     {
-        return $this->hasMany(ServiceUsage::class);
+        static::creating(function (Service $service) {
+            if (empty($service->slug)) {
+                $baseSlug = Str::slug(Str::limit($service->name, 60, ''));
+                $slug = $baseSlug;
+                $suffix = 2;
+
+                while (static::where('slug', $slug)->exists()) {
+                    $slug = "{$baseSlug}-{$suffix}";
+                    $suffix++;
+                }
+
+                $service->slug = $slug;
+            }
+        });
     }
 
-    public function plans(): HasMany
+    public function getRouteKeyName(): string
     {
-        return $this->hasMany(ServicePlan::class);
+        return 'slug';
     }
 
-    public function getTotalUsageToday()
+    public function versions(): HasMany
     {
-        return $this->usages()
-            ->whereDate('usage_date', today())
-            ->sum('requests_count');
+        return $this->hasMany(ServiceVersion::class);
     }
 
-    public function getTotalRevenueThisMonth()
+    public function currentVersion(): HasOne
     {
-        return $this->usages()
-            ->whereMonth('usage_date', now()->month)
-            ->whereYear('usage_date', now()->year)
-            ->sum('cost');
+        return $this->hasOne(ServiceVersion::class)
+            ->where('is_requestable', true)
+            ->where('status', 'available')
+            ->latest('release_date');
     }
 
-    public function getActiveSubscribersCount()
+    public function requests(): HasMany
     {
-        return $this->plans()
-            ->where('is_active', true)
-            ->distinct('user_id')
-            ->count();
+        return $this->hasMany(ServiceRequest::class);
     }
 }

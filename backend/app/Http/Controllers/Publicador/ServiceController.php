@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePublisherServiceRequest;
 use App\Http\Resources\ServiceResource;
 use App\Models\Service;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,6 +30,11 @@ class ServiceController extends Controller
 
     public function store(StorePublisherServiceRequest $request): JsonResponse
     {
+        Log::debug('publicador.store input', [
+            'raw' => $request->getContent(),
+            'parsed' => $request->all(),
+        ]);
+
         $data = $request->validated();
 
         $versionData = $data['version'];

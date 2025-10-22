@@ -1,8 +1,14 @@
 const inferDevBaseUrl = () => {
-  if (import.meta.env.DEV) {
-    return 'http://localhost:8000'
+  if (!import.meta.env.DEV) {
+    return ''
   }
-  return ''
+
+  const explicit = import.meta.env.VITE_API_DEV_PORT
+  if (explicit) {
+    return `http://localhost:${explicit}`
+  }
+
+  return 'http://localhost:8080'
 }
 
 const providedBaseUrl = import.meta.env.VITE_API_BASE_URL || inferDevBaseUrl()
