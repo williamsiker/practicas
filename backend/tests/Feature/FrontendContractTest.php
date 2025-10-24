@@ -16,11 +16,17 @@ class FrontendContractTest extends TestCase
 
     protected function setUp(): void
     {
-        if (! extension_loaded('pdo_mysql')) {
-            $this->markTestSkipped('La extensión pdo_mysql es necesaria para ejecutar las pruebas de contrato del frontend.');
+        if (! extension_loaded('pdo_sqlite')) {
+            $this->markTestSkipped('La extensión pdo_sqlite es necesaria para ejecutar las pruebas de contrato del frontend.');
         }
 
         parent::setUp();
+    }
+
+    protected function defineEnvironment($app): void
+    {
+        $app['config']->set('database.default', 'sqlite');
+        $app['config']->set('database.connections.sqlite.database', ':memory:');
     }
 
     private function createPublisher(): User

@@ -1,31 +1,26 @@
 <?php
 
-use App\Http\Controllers\Consumidor\ServiceController as ConsumidorServiceController;
-use App\Http\Controllers\Consumidor\ServiceRequestController as ConsumidorServiceRequestController;
-use App\Http\Controllers\Publicador\ServiceController as PublicadorServiceController;
-use App\Http\Controllers\Admin\ServiceApprovalController;
+use App\Http\Controllers\Api\PublisherServiceController;
+use App\Http\Controllers\Api\ServiceApprovalBySlugController;
+use App\Http\Controllers\Api\ServiceCatalogController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => response()->json(['status' => 'ok']));
 
 Route::prefix('publicador')->group(function () {
-    Route::get('services', [PublicadorServiceController::class, 'index']);
-    Route::post('services', [PublicadorServiceController::class, 'store']);
-    Route::get('services/{service:slug}', [PublicadorServiceController::class, 'show']);
-    Route::post('services/{service:slug}/duplicate', [PublicadorServiceController::class, 'duplicate']);
+    Route::get('services', [PublisherServiceController::class, 'index']);
+    Route::post('services', [PublisherServiceController::class, 'store']);
+    Route::post('services/{slug}/duplicate', [PublisherServiceController::class, 'duplicate']);
 });
 
 Route::prefix('consumidor')->group(function () {
-    Route::get('services', [ConsumidorServiceController::class, 'index']);
-    Route::get('services/{service:slug}', [ConsumidorServiceController::class, 'show']);
-    Route::post(
-        'services/{service:slug}/versions/{version}/requests',
-        [ConsumidorServiceRequestController::class, 'store']
-    );
+    Route::get('services', [ServiceCatalogController::class, 'getServiceCatalog']);
+    Route::get('services/{id}', [ServiceCatalogController::class, 'getServiceDetails']);
+    Route::post('services/{slug}/versions/{versionId}/requests', [ServiceCatalogController::class, 'createServiceRequest']);
 });
 
 Route::prefix('admin')->group(function () {
-    Route::get('services/pending', [ServiceApprovalController::class, 'pending']);
-    Route::post('services/{service:slug}/approve', [ServiceApprovalController::class, 'approve']);
-    Route::post('services/{service:slug}/reject', [ServiceApprovalController::class, 'reject']);
+    Route::get('services/pending', [ServiceApprovalBySlugController::class, 'index']);
+    Route::post('services/{slug}/approve', [ServiceApprovalBySlugController::class, 'approve']);
+    Route::post('services/{slug}/reject', [ServiceApprovalBySlugController::class, 'reject']);
 });
