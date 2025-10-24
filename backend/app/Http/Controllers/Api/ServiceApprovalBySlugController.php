@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class ServiceApprovalBySlugController extends Controller
@@ -110,6 +111,23 @@ class ServiceApprovalBySlugController extends Controller
                 ], 422);
             }
 
+            $validator = Validator::make($request->all(), [
+                'endpoint_base' => 'nullable|string|max:60',
+                'endpoint_slug' => 'nullable|string|max:120',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Datos de endpoint inválidos',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            $endpointOverrides = collect($validator->validated())
+                ->filter(fn ($value) => filled($value))
+                ->all();
+
             DB::beginTransaction();
 
             try {
@@ -131,7 +149,7 @@ class ServiceApprovalBySlugController extends Controller
                 }
 
                 // Create the actual service from the request
-                $service = $this->createServiceFromRequest($serviceRequest, $adminId);
+                $service = $this->createServiceFromRequest($serviceRequest, $adminId, $endpointOverrides);
 
                 // Update service request status
                 $serviceRequest->update([
@@ -220,13 +238,95 @@ class ServiceApprovalBySlugController extends Controller
     /**
      * Create a service from an approved service request
      */
-    private function createServiceFromRequest(ServiceRequest $serviceRequest, int $adminId): EnhancedService
+    public function updateEndpoint(Request $request, $slug_param)
+    {
+        try {
+            $adminId = $this->resolveAdminId($request);
+
+            if (! $adminId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Authentication required for admin actions',
+                ], 401);
+            }
+
+            $id = $this->extractIdFromSlug($slug_param);
+
+            if (! $id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invalid service identifier',
+                ], 422);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'endpoint_base' => 'nullable|string|max:60',
+                'endpoint_slug' => 'nullable|string|max:120',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Datos de endpoint inválidos',
+                    'errors' => $validator->errors(),
+                ], 422);
+            }
+
+            $service = EnhancedService::findOrFail($id);
+
+            $config = $service->operational_config ?? [];
+            if (! is_array($config)) {
+                $config = [];
+            }
+
+            $payload = collect($validator->validated())->filter(fn ($value) => filled($value));
+
+            if ($payload->has('endpoint_base')) {
+                $config['endpoint_base'] = $payload->get('endpoint_base');
+            }
+
+            if ($payload->has('endpoint_slug')) {
+                $config['endpoint_slug'] = $payload->get('endpoint_slug');
+            }
+
+            $service->operational_config = $config;
+            $service->applyManagedEndpoint(false);
+            $service->save();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Endpoint del servicio actualizado correctamente',
+                'data' => [
+                    'managed_endpoint' => $service->url,
+                    'endpoint_base' => Arr::get($service->operational_config, 'endpoint_base'),
+                    'endpoint_slug' => Arr::get($service->operational_config, 'endpoint_slug'),
+                    'original_url' => Arr::get($service->operational_config, 'original_url'),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to update service endpoint',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    private function createServiceFromRequest(ServiceRequest $serviceRequest, int $adminId, array $endpointOverrides = []): EnhancedService
     {
         $metrics = $serviceRequest->metrics_config ?? [];
         $operationalConfig = array_merge($metrics, [
             'schedule' => Arr::get($metrics, 'schedule', 'office'),
             'monthly_limit' => $serviceRequest->max_requests_per_month,
         ]);
+
+        if (isset($endpointOverrides['endpoint_base'])) {
+            $operationalConfig['endpoint_base'] = $endpointOverrides['endpoint_base'];
+        }
+
+        if (isset($endpointOverrides['endpoint_slug'])) {
+            $operationalConfig['endpoint_slug'] = $endpointOverrides['endpoint_slug'];
+        }
 
         $serviceData = [
             'name' => $serviceRequest->name,

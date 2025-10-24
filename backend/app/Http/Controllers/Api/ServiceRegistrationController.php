@@ -132,8 +132,15 @@ class ServiceRegistrationController extends Controller
 
             $operationalConfig = $this->prepareOperationalConfig($request->all(), $publisherId);
 
+            $existingConfig = $service->operational_config ?? [];
+            if (! is_array($existingConfig)) {
+                $existingConfig = [];
+            }
+
+            $mergedConfig = array_merge($existingConfig, $operationalConfig);
+
             $service->update([
-                'operational_config' => $operationalConfig,
+                'operational_config' => $mergedConfig,
                 'updated_at' => now(),
             ]);
 

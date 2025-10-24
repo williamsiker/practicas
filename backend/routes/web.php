@@ -45,6 +45,7 @@ Route::prefix('admin')->group(function () {
     Route::get('/services/pending', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'index']);
     Route::post('/services/approve/{slug_param}', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'approve']);
     Route::post('/services/reject/{slug_param}', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'reject']);
+    Route::patch('/services/{slug_param}/endpoint', [\App\Http\Controllers\Api\ServiceApprovalBySlugController::class, 'updateEndpoint']);
 });
 
 // PHASE 3: Service Management and Publication (Publisher side)

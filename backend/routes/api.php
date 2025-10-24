@@ -23,4 +23,5 @@ Route::prefix('admin')->group(function () {
     Route::get('services/pending', [ServiceApprovalBySlugController::class, 'index']);
     Route::post('services/{slug}/approve', [ServiceApprovalBySlugController::class, 'approve']);
     Route::post('services/{slug}/reject', [ServiceApprovalBySlugController::class, 'reject']);
+    Route::patch('services/{slug}/endpoint', [ServiceApprovalBySlugController::class, 'updateEndpoint']);
 });

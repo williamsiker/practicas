@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 class EnhancedService extends Model
 {
@@ -68,6 +70,19 @@ class EnhancedService extends Model
         'published_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::created(function (self $service): void {
+            $service->applyManagedEndpoint();
+        });
+
+        static::updating(function (self $service): void {
+            if ($service->isDirty('name') || $service->isDirty('operational_config')) {
+                $service->applyManagedEndpoint(false);
+            }
+        });
+    }
+
     // Relationships
     public function publisher(): BelongsTo
     {
@@ -97,6 +112,65 @@ class EnhancedService extends Model
     public function plans(): HasMany
     {
         return $this->hasMany(ServicePlan::class, 'service_id');
+    }
+
+    public function applyManagedEndpoint(bool $persist = true): void
+    {
+        $config = $this->operational_config ?? [];
+
+        if (! is_array($config)) {
+            $config = [];
+        }
+
+        $baseSegment = Arr::get($config, 'endpoint_base');
+        if (! $baseSegment) {
+            $baseSegment = 'servicio' . $this->id;
+        }
+        $baseSegment = Str::slug(trim($baseSegment, '/'));
+        if ($baseSegment === '') {
+            $baseSegment = 'servicio' . $this->id;
+        }
+
+        $slugSegment = Arr::get($config, 'endpoint_slug');
+        if (! $slugSegment) {
+            $slugSegment = Str::slug($this->name);
+        }
+        $slugSegment = Str::slug($slugSegment);
+        if ($slugSegment === '') {
+            $slugSegment = (string) $this->id;
+        }
+
+        $uniqueSlug = $slugSegment;
+        $candidate = '/' . trim($baseSegment, '/') . '/' . trim($uniqueSlug, '/');
+        $suffix = 1;
+
+        while (
+            static::where('id', '!=', $this->id)
+                ->where('url', $candidate)
+                ->exists()
+        ) {
+            $suffix++;
+            $uniqueSlug = $slugSegment . '-' . $suffix;
+            $candidate = '/' . trim($baseSegment, '/') . '/' . trim($uniqueSlug, '/');
+        }
+
+        $originalUrl = $this->getOriginal('url') ?: $this->url;
+        if (! Arr::has($config, 'original_url') && $originalUrl && $originalUrl !== $candidate) {
+            Arr::set($config, 'original_url', $originalUrl);
+        }
+
+        Arr::set($config, 'endpoint_base', trim($baseSegment, '/'));
+        Arr::set($config, 'endpoint_slug', trim($uniqueSlug, '/'));
+        Arr::set($config, 'managed_endpoint', $candidate);
+
+        $this->forceFill([
+            'url' => $candidate,
+            'operational_config' => $config,
+        ]);
+
+        if ($persist) {
+            $this->saveQuietly();
+        }
     }
 
     // Scopes

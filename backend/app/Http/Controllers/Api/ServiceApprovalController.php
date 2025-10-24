@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\EnhancedService;
 use App\Models\ServiceRequest;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -126,6 +127,8 @@ class ServiceApprovalController extends Controller
 
             $validator = Validator::make($request->all(), [
                 'review_notes' => 'nullable|string|max:1000',
+                'endpoint_base' => 'nullable|string|max:60',
+                'endpoint_slug' => 'nullable|string|max:120',
             ]);
 
             if ($validator->fails()) {
@@ -157,7 +160,12 @@ class ServiceApprovalController extends Controller
                 }
 
                 // Create the actual service from the request
-                $service = $this->createServiceFromRequest($serviceRequest, $adminId);
+                $endpointOverrides = collect($validator->validated())
+                    ->only(['endpoint_base', 'endpoint_slug'])
+                    ->filter(fn ($value) => filled($value))
+                    ->all();
+
+                $service = $this->createServiceFromRequest($serviceRequest, $adminId, $endpointOverrides);
 
                 // Update service request status
                 $serviceRequest->update([
@@ -348,9 +356,22 @@ class ServiceApprovalController extends Controller
     /**
      * Create a service from an approved service request
      */
-    private function createServiceFromRequest(ServiceRequest $serviceRequest, int $adminId): EnhancedService
+    private function createServiceFromRequest(ServiceRequest $serviceRequest, int $adminId, array $endpointOverrides = []): EnhancedService
     {
-        // Map service request data to enhanced service model
+        $metrics = $serviceRequest->metrics_config ?? [];
+        $operationalConfig = array_merge($metrics ?? [], [
+            'schedule' => Arr::get($metrics, 'schedule', 'office'),
+            'monthly_limit' => $serviceRequest->max_requests_per_month,
+        ]);
+
+        if (isset($endpointOverrides['endpoint_base'])) {
+            $operationalConfig['endpoint_base'] = $endpointOverrides['endpoint_base'];
+        }
+
+        if (isset($endpointOverrides['endpoint_slug'])) {
+            $operationalConfig['endpoint_slug'] = $endpointOverrides['endpoint_slug'];
+        }
+
         $serviceData = [
             'name' => $serviceRequest->name,
             'description' => $serviceRequest->description,
@@ -381,6 +402,7 @@ class ServiceApprovalController extends Controller
             'approved_at' => now(),
             'terms_accepted' => $serviceRequest->terms_accepted,
             'terms_accepted_at' => $serviceRequest->terms_accepted_at,
+            'operational_config' => $operationalConfig,
         ];
 
         return EnhancedService::create($serviceData);

@@ -6,6 +6,7 @@ use App\Models\EnhancedService;
 use App\Models\ServiceRequest;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Tests\TestCase;
@@ -107,7 +108,7 @@ class FrontendContractTest extends TestCase
         ], $overrides));
     }
 
-    public function test_publisher_services_listing_matches_frontend_contract(): void
+    public function test_listado_servicios_publicador_cumple_contrato_frontend(): void
     {
         $publisher = $this->createPublisher();
 
@@ -130,7 +131,7 @@ class FrontendContractTest extends TestCase
         $this->assertArrayHasKey('status', $sample['versions'][0]);
     }
 
-    public function test_publisher_can_create_service_request_through_api(): void
+    public function test_publicador_puede_crear_solicitud_servicio_via_api(): void
     {
         $publisher = $this->createPublisher();
 
@@ -172,7 +173,7 @@ class FrontendContractTest extends TestCase
         ]);
     }
 
-    public function test_admin_pending_services_endpoint_includes_expected_fields(): void
+    public function test_endpoint_admin_servicios_pendientes_incluye_campos_esperados(): void
     {
         $publisher = $this->createPublisher();
         $admin = User::factory()->create();
@@ -194,7 +195,7 @@ class FrontendContractTest extends TestCase
             );
     }
 
-    public function test_admin_can_approve_service_request_by_slug(): void
+    public function test_admin_puede_aprobar_solicitud_servicio_por_slug(): void
     {
         $publisher = $this->createPublisher();
         $admin = User::factory()->create();
@@ -222,9 +223,24 @@ class FrontendContractTest extends TestCase
             'name' => $request->name,
             'status' => 'ready_to_publish',
         ]);
+
+        $approvedService = EnhancedService::find($approvedServiceId);
+        $this->assertNotNull($approvedService);
+        $this->assertMatchesRegularExpression(
+            sprintf('#^/servicio%s/#', $approvedService->id),
+            $approvedService->url
+        );
+        $this->assertSame(
+            $approvedService->url,
+            Arr::get($approvedService->operational_config, 'managed_endpoint')
+        );
+        $this->assertSame(
+            $request->url,
+            Arr::get($approvedService->operational_config, 'original_url')
+        );
     }
 
-    public function test_admin_can_reject_service_request_by_slug(): void
+    public function test_admin_puede_rechazar_solicitud_servicio_por_slug(): void
     {
         $publisher = $this->createPublisher();
         $admin = User::factory()->create();
@@ -243,10 +259,116 @@ class FrontendContractTest extends TestCase
         ]);
     }
 
-    public function test_consumer_catalog_endpoint_returns_transformed_service(): void
+    public function test_admin_puede_actualizar_endpoint_administrado_del_servicio(): void
     {
         $publisher = $this->createPublisher();
-        $service = $this->seedEnhancedService($publisher);
+        $admin = User::factory()->create();
+        $request = $this->seedServiceRequest($publisher, ['url' => 'https://example.test/svc']);
+
+        $slug = Str::slug($request->name . '-' . $request->id);
+        $this->actingAs($admin)->postJson("/api/admin/services/{$slug}/approve")->assertOk();
+
+        $service = EnhancedService::where('name', $request->name)->firstOrFail();
+        $serviceSlug = Str::slug($service->name . '-' . $service->id);
+
+        $payload = [
+            'endpoint_base' => 'servicio-especial',
+            'endpoint_slug' => 'mesa-digital',
+        ];
+
+        $this->actingAs($admin)
+            ->patchJson("/api/admin/services/{$serviceSlug}/endpoint", $payload)
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('data.managed_endpoint', '/servicio-especial/mesa-digital');
+
+        $service->refresh();
+
+        $this->assertSame('/servicio-especial/mesa-digital', $service->url);
+        $this->assertSame(
+            '/servicio-especial/mesa-digital',
+            Arr::get($service->operational_config, 'managed_endpoint')
+        );
+        $this->assertSame(
+            $request->url,
+            Arr::get($service->operational_config, 'original_url')
+        );
+    }
+
+    public function test_endpoint_administrado_genera_sufijos_para_evitar_conflictos(): void
+    {
+        $publisher = $this->createPublisher();
+        $admin = User::factory()->create();
+
+        $firstRequest = $this->seedServiceRequest($publisher, ['name' => 'Servicio Uno', 'url' => 'https://example.test/uno']);
+        $secondRequest = $this->seedServiceRequest($publisher, ['name' => 'Servicio Dos', 'url' => 'https://example.test/dos']);
+
+        $firstSlug = Str::slug($firstRequest->name . '-' . $firstRequest->id);
+        $secondSlug = Str::slug($secondRequest->name . '-' . $secondRequest->id);
+
+        $this->actingAs($admin)->postJson("/api/admin/services/{$firstSlug}/approve")->assertOk();
+        $this->actingAs($admin)->postJson("/api/admin/services/{$secondSlug}/approve")->assertOk();
+
+        $firstService = EnhancedService::where('name', $firstRequest->name)->firstOrFail();
+        $secondService = EnhancedService::where('name', $secondRequest->name)->firstOrFail();
+
+        $sharedPayload = [
+            'endpoint_base' => 'servicio-comun',
+            'endpoint_slug' => 'canal',
+        ];
+
+        $firstServiceSlug = Str::slug($firstService->name . '-' . $firstService->id);
+        $secondServiceSlug = Str::slug($secondService->name . '-' . $secondService->id);
+
+        $this->actingAs($admin)
+            ->patchJson("/api/admin/services/{$firstServiceSlug}/endpoint", $sharedPayload)
+            ->assertOk()
+            ->assertJsonPath('data.managed_endpoint', '/servicio-comun/canal');
+
+        $this->actingAs($admin)
+            ->patchJson("/api/admin/services/{$secondServiceSlug}/endpoint", $sharedPayload)
+            ->assertOk()
+            ->assertJsonPath('data.managed_endpoint', '/servicio-comun/canal-2');
+
+        $firstService->refresh();
+        $secondService->refresh();
+
+        $this->assertSame('/servicio-comun/canal', $firstService->url);
+        $this->assertSame('/servicio-comun/canal-2', $secondService->url);
+    }
+
+    public function test_publicador_visualiza_endpoint_dinamico_en_listado(): void
+    {
+        $publisher = $this->createPublisher();
+        $admin = User::factory()->create();
+        $request = $this->seedServiceRequest($publisher, [
+            'name' => 'Servicio Integral de Atención',
+            'url' => 'https://gob.pe/servicio-integral',
+        ]);
+
+        $slug = Str::slug($request->name . '-' . $request->id);
+        $this->actingAs($admin)->postJson("/api/admin/services/{$slug}/approve")->assertOk();
+
+        $service = EnhancedService::where('name', $request->name)->firstOrFail()->fresh();
+
+        $response = $this->actingAs($publisher)->getJson('/api/publicador/services');
+        $response->assertOk();
+
+        $payload = collect($response->json());
+        $entry = $payload->firstWhere('id', $service->id);
+
+        $this->assertNotNull($entry, 'Se esperaba que el servicio aprobado aparezca en el listado del publicador.');
+        $this->assertSame($service->url, $entry['url']);
+        $this->assertMatchesRegularExpression(
+            sprintf('#^/servicio%s/#', $service->id),
+            $entry['url']
+        );
+    }
+
+    public function test_endpoint_consumidor_catalogo_retorna_servicio_transformado(): void
+    {
+        $publisher = $this->createPublisher();
+        $service = $this->seedEnhancedService($publisher)->fresh();
 
         $response = $this->getJson('/api/consumidor/services');
 
@@ -255,14 +377,19 @@ class FrontendContractTest extends TestCase
         $payload = collect($response->json());
         $entry = $payload->firstWhere('id', $service->id);
 
-        $this->assertNotNull($entry, 'Expected to find seeded service in consumer catalog response.');
+        $this->assertNotNull($entry, 'Se esperaba encontrar el servicio sembrado en la respuesta del catálogo de consumidor.');
         $this->assertSame(Str::slug($service->name . '-' . $service->id), $entry['slug']);
         $this->assertSame('aprobado', $entry['status']);
+        $this->assertSame($service->url, $entry['url']);
+        $this->assertMatchesRegularExpression(
+            sprintf('#^/servicio%s/#', $service->id),
+            $entry['url']
+        );
         $this->assertArrayHasKey('versions', $entry);
         $this->assertGreaterThan(0, count($entry['versions']));
     }
 
-    public function test_consumer_can_submit_service_usage_request(): void
+    public function test_consumidor_puede_enviar_solicitud_uso_servicio(): void
     {
         $publisher = $this->createPublisher();
         $service = $this->seedEnhancedService($publisher, ['status' => 'published']);
