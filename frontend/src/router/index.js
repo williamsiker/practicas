@@ -6,9 +6,17 @@ import adminRoutes from "./administrador";
 
 
 const routes = [
-    ...publicadorRoutes,
-    ...consumidorRoutes,
-    ...adminRoutes
+  {
+    path: '/',
+    redirect: '/admin/dashboard',
+  },
+  ...publicadorRoutes,
+  ...consumidorRoutes,
+  ...adminRoutes,
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/admin/dashboard',
+  },
 ];
 
 const router = createRouter({

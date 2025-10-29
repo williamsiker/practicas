@@ -49,6 +49,8 @@ frontend/.idea
 # MySQL data
 # ------------------------
 mysql/data/
+mysql/
+scripts/
 
 # Archivos del sistema
 .DS_Store

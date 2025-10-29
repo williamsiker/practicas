@@ -1,61 +1,86 @@
 services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_DATABASE:-plataforma}
+      MYSQL_USER: ${DB_USERNAME:-plataforma_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-plataforma_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 5s
+      interval: 10s
+      retries: 6
+    networks:
+      - plataforma_net
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: backend-plataforma-servicios
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL:-http://practicas}
+      APP_KEY: ${APP_KEY:-}
+      LOG_CHANNEL: ${LOG_CHANNEL:-stack}
+      SESSION_DRIVER: ${SESSION_DRIVER:-file}
+      SESSION_LIFETIME: ${SESSION_LIFETIME:-120}
+      CACHE_DRIVER: ${CACHE_DRIVER:-file}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-sync}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-plataforma}
+      DB_USERNAME: ${DB_USERNAME:-plataforma_user}
+      DB_PASSWORD: ${DB_PASSWORD:-plataforma_password}
+      BROADCAST_DRIVER: ${BROADCAST_DRIVER:-log}
+      FILESYSTEM_DISK: ${FILESYSTEM_DISK:-public}
     volumes:
-      - ./backend:/var/www
+      - storage:/var/www/storage
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
-      - red_plataforma_servicios
+      - plataforma_net
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: frontend-plataforma-servicios
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-    command: sh -c "npm install && npm run dev --host"
+    restart: unless-stopped
+    expose:
+      - "4173"
+    environment:
+      NODE_ENV: production
     networks:
-      - red_plataforma_servicios
+      - plataforma_net
 
   nginx:
-    image: nginx:alpine
-    container_name: nginx-plataforma-servicios
+    image: nginx:1.27-alpine
+    restart: unless-stopped
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
-      - ./backend:/var/www
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - storage:/var/www/storage:ro
     depends_on:
       - backend
       - frontend
     networks:
-      - red_plataforma_servicios
+      - plataforma_net
 
-  mysql:
-    image: mysql:8.0
-    container_name: mysql-plataforma-servicios
-    restart: always
-    command: --default-authentication-plugin=mysql_native_password
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: plataforma
-      MYSQL_USER: db_user
-      MYSQL_PASSWORD: db_password
-    ports:
-      - "3307:3306"
-    volumes:
-      - ./mysql/data:/var/lib/mysql
-      - ./mysql/my.cnf:/etc/mysql/my.cnf
-    networks:
-      - red_plataforma_servicios
+volumes:
+  storage:
+  mysql_data:
 
 networks:
-  red_plataforma_servicios:
+  plataforma_net:
     driver: bridge
