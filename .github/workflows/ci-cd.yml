@@ -41,7 +41,7 @@ jobs:
             set -euo pipefail
             cd "${DEPLOY_PATH}"
             git fetch ci-cd main
-            git reset --hard origin/main
+            git reset --hard ci-cd/main
             docker compose pull || true
             docker compose down
             docker compose up -d --build --remove-orphans
