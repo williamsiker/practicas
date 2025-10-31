@@ -31,6 +31,26 @@ jobs:
       name: production
 
     steps:
+      - name: Dump runner context
+        run: |
+          set -euxo pipefail
+          echo "Runner hostname: $(hostname)"
+          echo "Runner public IP: $(curl -fsS https://api.ipify.org || echo unknown)"
+          ip addr
+          ip route
+
+      - name: Check SSH reachability
+        env:
+          DEPLOY_HOST: ${{ secrets.SSH_HOST }}
+          DEPLOY_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          set -euxo pipefail
+          : "${DEPLOY_PORT:=22}"
+          sudo apt-get update -y
+          sudo apt-get install -y netcat-openbsd traceroute
+          nc -vz -w 5 "${DEPLOY_HOST}" "${DEPLOY_PORT}"
+          traceroute -n "${DEPLOY_HOST}" || true
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.1
         with:
@@ -46,3 +66,4 @@ jobs:
             docker compose down
             docker compose up -d --build --remove-orphans
             docker image prune -f
+          debug: true
