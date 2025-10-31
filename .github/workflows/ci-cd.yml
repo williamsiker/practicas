@@ -40,7 +40,7 @@ jobs:
           script: |
             set -euo pipefail
             cd "${DEPLOY_PATH}"
-            git fetch origin main
+            git fetch ci-cd main
             git reset --hard origin/main
             docker compose pull || true
             docker compose down
