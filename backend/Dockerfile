@@ -40,10 +40,10 @@ WORKDIR /var/www
 
 COPY --from=vendor /var/www /var/www
 
-RUN mkdir -p /opt/app && \
-    cp -a /var/www/storage /opt/app/storage-skeleton && \
-    chown -R www-data:www-data storage bootstrap/cache && \
-    chmod -R ug+rwX storage bootstrap/cache
+RUN mkdir -p /opt/app/storage-skeleton /var/www/storage /var/www/bootstrap/cache && \
+    rsync -a /var/www/storage/ /opt/app/storage-skeleton/ && \
+    chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache && \
+    chmod -R ug+rwX /var/www/storage /var/www/bootstrap/cache
 
 COPY docker/entrypoint.sh /usr/local/bin/backend-entrypoint
 
