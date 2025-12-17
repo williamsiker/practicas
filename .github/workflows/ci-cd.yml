@@ -52,8 +52,8 @@ jobs:
           
           # Fetch latest changes
           echo "Fetching changes..."
-          git fetch origin main
-          git reset --hard origin/main
+          git fetch ci-cd main
+          git reset --hard ci-cd/main
           
           # Docker operations
           docker compose pull || true
