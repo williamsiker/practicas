@@ -1,5 +1,5 @@
 
-FROM composer:2 AS vendor
+FROM composer:2.7.6 AS vendor
 
 WORKDIR /var/www/backend
 
