@@ -56,6 +56,15 @@ jobs:
           git reset --hard ci-cd/main
           
           # Docker operations
+          # Forcefully free port 80 to ensure seamless continuity
+          echo "Checking for processes on port 80..."
+          if sudo lsof -i :80 > /dev/null; then
+            echo "Port 80 is in use. Killing interfering process..."
+            sudo fuser -k 80/tcp || true
+            # Wait a moment for the port to actually free up
+            sleep 2
+          fi
+          
           docker compose pull || true
           docker compose down
           docker compose up -d --build --remove-orphans
