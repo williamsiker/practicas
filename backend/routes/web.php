@@ -59,6 +59,7 @@ Route::prefix('services')->group(function () {
 });
 
 // Rutas específicas para el frontend de publicador
+/////
 Route::prefix('publicador')->group(function () {
     Route::get('/services', [\App\Http\Controllers\Api\PublisherServiceController::class, 'index']);
     Route::post('/services', [\App\Http\Controllers\Api\PublisherServiceController::class, 'store']);

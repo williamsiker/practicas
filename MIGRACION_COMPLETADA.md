@@ -1,3 +1,4 @@
+ 
 # Migración Completada: plataforma_servicios → plataforma_pide
 
 ## Resumen de la Migración
