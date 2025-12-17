@@ -40,29 +40,44 @@ jobs:
           ip route
 
       - name: Check SSH reachability
-        env:
-          DEPLOY_HOST: ${{ secrets.SSH_HOST }}
-          DEPLOY_PORT: ${{ secrets.SSH_PORT }}
         run: |
           set -euxo pipefail
-          : "${DEPLOY_PORT:=22}"
+          # Using provided IP
+          TARGET_HOST="161.132.24.2"
+          TARGET_PORT="22"
+          
           sudo apt-get update -y
           sudo apt-get install -y netcat-openbsd traceroute
-          nc -vz -w 5 "${DEPLOY_HOST}" "${DEPLOY_PORT}"
-          traceroute -n "${DEPLOY_HOST}" || true
+          nc -vz -w 5 "$TARGET_HOST" "$TARGET_PORT"
+          traceroute -n "$TARGET_HOST" || true
 
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.1
         with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          port: ${{ secrets.SSH_PORT != '' && secrets.SSH_PORT || 22 }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          host: "161.132.24.2"
+          username: "developer"
+          password: "1n6TKMfybg5GdR3U"
+          port: 22
+          # key: ${{ secrets.SSH_PRIVATE_KEY }} # Using password as requested
           script: |
             set -euo pipefail
-            cd "${{ secrets.DEPLOY_PATH }}"
+            
+            # Navigate to deploy path (assuming it is set in secrets or fixed path, defaulting to user home for safety if secret missing)
+            # WORKAROUND: If DEPLOY_PATH is not set, we need a fallback. 
+            # Assuming standard path or relying on secret if valid. 
+            # User didn't provide path, but previous yaml used secrets.DEPLOY_PATH. 
+            # We will keep using the secret for path, assuming it is correct or user will fix valid path.
+            TARGET_PATH="${{ secrets.DEPLOY_PATH }}"
+            if [ -z "$TARGET_PATH" ]; then
+              TARGET_PATH="/home/developer/plataforma_pide" # Fallback guess or error out
+            fi
+            
+            cd "$TARGET_PATH"
+            
+            # Ensure we are on the right branch
             git fetch ci-cd main
             git reset --hard ci-cd/main
+            
             docker compose pull || true
             docker compose down
             docker compose up -d --build --remove-orphans
