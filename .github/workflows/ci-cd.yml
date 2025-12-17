@@ -25,60 +25,33 @@ jobs:
     name: Deploy to production
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment:
       name: production
 
     steps:
-      - name: Dump runner context
+      - name: Deploy Application
+        env:
+          # If secret is missing, default to the likely path based on previous context
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/home/developer/plataforma_pide' }}
         run: |
-          set -euxo pipefail
-          echo "Runner hostname: $(hostname)"
-          echo "Runner public IP: $(curl -fsS https://api.ipify.org || echo unknown)"
-          ip addr
-          ip route
-
-      - name: Check SSH reachability
-        run: |
-          set -euxo pipefail
-          # Using provided IP
-          TARGET_HOST="161.132.24.2"
-          TARGET_PORT="22"
+          set -euo pipefail
+          echo "Deploying to: $DEPLOY_PATH"
           
-          sudo apt-get update -y
-          sudo apt-get install -y netcat-openbsd traceroute
-          nc -vz -w 5 "$TARGET_HOST" "$TARGET_PORT"
-          traceroute -n "$TARGET_HOST" || true
-
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.0.1
-        with:
-          host: "161.132.24.2"
-          username: "developer"
-          password: "1n6TKMfybg5GdR3U"
-          port: 22
-          # key: ${{ secrets.SSH_PRIVATE_KEY }} # Using password as requested
-          script: |
-            set -euo pipefail
-            
-            # Navigate to deploy path (assuming it is set in secrets or fixed path, defaulting to user home for safety if secret missing)
-            # WORKAROUND: If DEPLOY_PATH is not set, we need a fallback. 
-            # Assuming standard path or relying on secret if valid. 
-            # User didn't provide path, but previous yaml used secrets.DEPLOY_PATH. 
-            # We will keep using the secret for path, assuming it is correct or user will fix valid path.
-            TARGET_PATH="${{ secrets.DEPLOY_PATH }}"
-            if [ -z "$TARGET_PATH" ]; then
-              TARGET_PATH="/home/developer/plataforma_pide" # Fallback guess or error out
-            fi
-            
-            cd "$TARGET_PATH"
-            
-            # Ensure we are on the right branch
-            git fetch ci-cd main
-            git reset --hard ci-cd/main
-            
-            docker compose pull || true
-            docker compose down
-            docker compose up -d --build --remove-orphans
-            docker image prune -f
-          debug: true
+          # Go to target directory
+          cd "$DEPLOY_PATH"
+          
+          # Fetch changes
+          # Assuming the remote on the server is named 'origin' or 'ci-cd'. 
+          # We'll try 'origin' first, if likely. But original file had 'ci-cd'.
+          # Let's use a safer approach: fetch from the repo URL or just pull if upstream is set.
+          # Reverting to the logic found in the original successful configuration: git fetch ci-cd main
+          
+          git fetch ci-cd main || git fetch origin main
+          git reset --hard ci-cd/main || git reset --hard origin/main
+          
+          # Docker operations
+          docker compose pull || true
+          docker compose down
+          docker compose up -d --build --remove-orphans
+          docker image prune -f
