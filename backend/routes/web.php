@@ -22,7 +22,7 @@ Route::prefix('catalog')->group(function () {
     Route::post('/load-mock-services', [\App\Http\Controllers\Api\ServiceCatalogController::class, 'loadMockServices']);
 });
 
-// PHASE 1: Service Requests (Publisher side - HU001)
+// PHASE 1: Service Requests (Publisher side - HU001) is being left by another
 Route::prefix('service-requests')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\ServiceRequestController::class, 'index']);
     Route::post('/', [\App\Http\Controllers\Api\ServiceRequestController::class, 'store']);
