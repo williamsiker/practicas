@@ -32,23 +32,28 @@ jobs:
     steps:
       - name: Deploy Application
         env:
-          # If secret is missing, default to the likely path based on previous context
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/home/developer/plataforma_pide' }}
+          # Hardcoding the path as confirmed by user to avoid Secret issues
+          DEPLOY_PATH: "/home/developer/plataforma_pide"
         run: |
           set -euo pipefail
           echo "Deploying to: $DEPLOY_PATH"
           
+          # Check if directory exists, if not clone it
+          if [ ! -d "$DEPLOY_PATH/.git" ]; then
+            echo "Directory not found or not a git repo. Cloning..."
+            sudo rm -rf "$DEPLOY_PATH" || true
+            mkdir -p "$DEPLOY_PATH"
+            # Use the runner's token to clone
+            git clone "https://github.com/${{ github.repository }}.git" "$DEPLOY_PATH"
+          fi
+          
           # Go to target directory
           cd "$DEPLOY_PATH"
           
-          # Fetch changes
-          # Assuming the remote on the server is named 'origin' or 'ci-cd'. 
-          # We'll try 'origin' first, if likely. But original file had 'ci-cd'.
-          # Let's use a safer approach: fetch from the repo URL or just pull if upstream is set.
-          # Reverting to the logic found in the original successful configuration: git fetch ci-cd main
-          
-          git fetch ci-cd main || git fetch origin main
-          git reset --hard ci-cd/main || git reset --hard origin/main
+          # Fetch latest changes
+          echo "Fetching changes..."
+          git fetch origin main
+          git reset --hard origin/main
           
           # Docker operations
           docker compose pull || true
