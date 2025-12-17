@@ -47,7 +47,7 @@ RUN mkdir -p /opt/app/storage-skeleton /var/www/backend/storage /var/www/backend
     chown -R www-data:www-data /var/www/backend/storage /var/www/backend/bootstrap/cache && \
     chmod -R ug+rwX /var/www/backend/storage /var/www/backend/bootstrap/cache
 
-COPY backend/docker/entrypoint.sh /usr/local/bin/backend-entrypoint
+COPY docker/entrypoint.sh /usr/local/bin/backend-entrypoint
 
 RUN chmod +x /usr/local/bin/backend-entrypoint
 
