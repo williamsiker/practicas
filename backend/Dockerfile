@@ -1,8 +1,9 @@
+
 FROM composer:2 AS vendor
 
-WORKDIR /var/www
+WORKDIR /var/www/backend
 
-COPY composer.json composer.lock ./
+COPY backend/composer.json backend/composer.lock ./
 RUN composer install \
     --no-dev \
     --no-interaction \
@@ -10,12 +11,13 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-COPY . .
+COPY backend/ .
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
     --optimize-autoloader
+
 
 FROM php:8.2-fpm
 
@@ -36,16 +38,16 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo_mysql mbstring zip gd \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /var/www
+WORKDIR /var/www/backend
 
-COPY --from=vendor /var/www /var/www
+COPY --from=vendor /var/www/backend /var/www/backend
 
-RUN mkdir -p /opt/app/storage-skeleton /var/www/storage /var/www/bootstrap/cache && \
-    rsync -a /var/www/storage/ /opt/app/storage-skeleton/ && \
-    chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache && \
-    chmod -R ug+rwX /var/www/storage /var/www/bootstrap/cache
+RUN mkdir -p /opt/app/storage-skeleton /var/www/backend/storage /var/www/backend/bootstrap/cache && \
+    rsync -a /var/www/backend/storage/ /opt/app/storage-skeleton/ && \
+    chown -R www-data:www-data /var/www/backend/storage /var/www/backend/bootstrap/cache && \
+    chmod -R ug+rwX /var/www/backend/storage /var/www/backend/bootstrap/cache
 
-COPY docker/entrypoint.sh /usr/local/bin/backend-entrypoint
+COPY backend/docker/entrypoint.sh /usr/local/bin/backend-entrypoint
 
 RUN chmod +x /usr/local/bin/backend-entrypoint
 
