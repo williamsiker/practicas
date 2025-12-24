@@ -22,7 +22,7 @@ Route::prefix('catalog')->group(function () {
     Route::post('/load-mock-services', [\App\Http\Controllers\Api\ServiceCatalogController::class, 'loadMockServices']);
 });
 
-// PHASE 1: Service Requests (Publisher side - HU001) is being left by another
+// PHASE 1: Service Requests (Publisher side - HU001)
 Route::prefix('service-requests')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\ServiceRequestController::class, 'index']);
     Route::post('/', [\App\Http\Controllers\Api\ServiceRequestController::class, 'store']);
@@ -59,7 +59,6 @@ Route::prefix('services')->group(function () {
 });
 
 // Rutas específicas para el frontend de publicador
-/////
 Route::prefix('publicador')->group(function () {
     Route::get('/services', [\App\Http\Controllers\Api\PublisherServiceController::class, 'index']);
     Route::post('/services', [\App\Http\Controllers\Api\PublisherServiceController::class, 'store']);

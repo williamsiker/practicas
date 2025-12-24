@@ -1,55 +1,12 @@
-
-FROM composer:2.7.6 AS vendor
-
-WORKDIR /var/www/backend
-
-COPY composer.json composer.lock ./
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts
-
-COPY . .
-RUN composer install \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --optimize-autoloader
-
-
 FROM php:8.2-fpm
 
-ENV PHP_MEMORY_LIMIT=512M \
-    COMPOSER_ALLOW_SUPERUSER=1
-
 RUN apt-get update && apt-get install -y \
-    git \
-    unzip \
-    zip \
-    libzip-dev \
-    libonig-dev \
-    libjpeg62-turbo-dev \
-    libpng-dev \
-    libfreetype6-dev \
-    rsync \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install pdo_mysql mbstring zip gd \
-    && rm -rf /var/lib/apt/lists/*
+    git unzip curl zip libzip-dev libonig-dev \
+    && docker-php-ext-install pdo pdo_mysql mbstring zip
 
-WORKDIR /var/www/backend
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-COPY --from=vendor /var/www/backend /var/www/backend
+WORKDIR /var/www
 
-RUN mkdir -p /opt/app/storage-skeleton /var/www/backend/storage /var/www/backend/bootstrap/cache && \
-    rsync -a /var/www/backend/storage/ /opt/app/storage-skeleton/ && \
-    chown -R www-data:www-data /var/www/backend/storage /var/www/backend/bootstrap/cache && \
-    chmod -R ug+rwX /var/www/backend/storage /var/www/backend/bootstrap/cache
-
-COPY docker/entrypoint.sh /usr/local/bin/backend-entrypoint
-
-RUN chmod +x /usr/local/bin/backend-entrypoint
-
-ENTRYPOINT ["backend-entrypoint"]
-CMD ["php-fpm"]
+COPY . /var/www
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader

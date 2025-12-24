@@ -190,6 +190,35 @@ class ServiceCatalogController extends Controller
     public function createServiceRequest(Request $request, $slug, $versionId)
     {
         try {
+            $consumerId = $this->resolveConsumerId($request);
+
+            if (!$consumerId) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Authentication required to create service requests',
+                ], 401);
+            }
+
+            $id = $this->extractIdFromSlug($slug); // Re-use the helper from other controllers for consistency.
+            
+            if (!$id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invalid service identifier',
+                ], 422);
+            }
+
+            $enhancedService = EnhancedService::where('id', $id)
+                                            ->whereIn('status', ['ready_to_publish', 'published', 'active'])
+                                            ->first();
+
+            if (!$enhancedService) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Service not found or not available for request',
+                ], 404);
+            }
+
             $validatedData = $request->validate([
                 'schedule' => 'required|string|in:office,full,custom',
                 'customStart' => 'nullable|string',
@@ -198,20 +227,67 @@ class ServiceCatalogController extends Controller
                 'notes' => 'nullable|string',
             ]);
 
+            // Create ServiceRequest
+            $serviceRequest = \App\Models\ServiceRequest::create([
+                'name' => $enhancedService->name,
+                'description' => $enhancedService->description,
+                'url' => $enhancedService->url,
+                'method' => $enhancedService->method,
+                'version' => $versionId, // Using versionId from route as the requested version
+                'requires_auth' => $enhancedService->requires_auth,
+                'auth_type' => $enhancedService->auth_type,
+                'auth_config' => $enhancedService->auth_config,
+                'documentation' => $enhancedService->documentation,
+                'parameters' => $enhancedService->parameters,
+                'responses' => $enhancedService->responses,
+                'error_codes' => $enhancedService->error_codes,
+                'validations' => $enhancedService->validations,
+                'metrics_enabled' => true, // Assuming metrics are enabled for requested services
+                'metrics_config' => [
+                    'schedule' => $validatedData['schedule'],
+                    'customStart' => $validatedData['customStart'] ?? null,
+                    'customEnd' => $validatedData['customEnd'] ?? null,
+                    'monthlyLimit' => $validatedData['monthlyLimit'],
+                ],
+                'has_demo' => $enhancedService->has_demo,
+                'demo_url' => $enhancedService->demo_url,
+                'base_price' => $enhancedService->base_price,
+                'pricing_tiers' => $enhancedService->pricing_tiers,
+                'max_requests_per_day' => $enhancedService->max_requests_per_day,
+                'max_requests_per_month' => $validatedData['monthlyLimit'],
+                'features' => $enhancedService->features,
+                'justification' => $validatedData['notes'] ?? 'Solicitud de acceso al servicio.',
+                'terms_accepted' => true, // Assuming terms are accepted when requesting
+                'terms_accepted_at' => now(),
+                'status' => 'pending_review', // Initial status for a new request
+                'publisher_id' => $enhancedService->publisher_id,
+                'consumer_id' => $consumerId,
+                'enhanced_service_id' => $enhancedService->id,
+            ]);
+
+            // Transform to match frontend expectations (similar to PublisherServiceController)
+            $responseData = [
+                'id' => $serviceRequest->id,
+                'serviceSlug' => $slug,
+                'versionId' => $serviceRequest->version,
+                'schedule' => Arr::get($serviceRequest->metrics_config, 'schedule'),
+                'monthlyLimit' => $serviceRequest->max_requests_per_month,
+                'notes' => $serviceRequest->justification,
+                'status' => $this->mapStatus($serviceRequest->status),
+                'createdAt' => $serviceRequest->created_at->toISOString(),
+            ];
+
             return response()->json([
                 'status' => 'success',
                 'message' => 'Service request created successfully',
-                'data' => [
-                    'id' => rand(1000, 9999),
-                    'serviceSlug' => $slug,
-                    'versionId' => $versionId,
-                    'schedule' => $validatedData['schedule'],
-                    'monthlyLimit' => $validatedData['monthlyLimit'],
-                    'notes' => $validatedData['notes'] ?? null,
-                    'status' => 'pending',
-                    'createdAt' => now()->toISOString(),
-                ],
-            ]);
+                'data' => $responseData,
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
@@ -220,6 +296,27 @@ class ServiceCatalogController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Extract numeric ID from slug
+     */
+    private function extractIdFromSlug($slug)
+    {
+        $parts = explode('-', $slug);
+        $lastPart = end($parts);
+        
+        if (is_numeric($lastPart)) {
+            return (int) $lastPart;
+        }
+        
+        return null;
+    }
+
+    private function resolveConsumerId(Request $request): ?int
+    {
+        return $request->user()?->id ?? \Illuminate\Support\Facades\Auth::id() ?? 1; // Default to user ID 1 for testing
+    }
+
 
     /**
      * Load services from static JSON (Mock data).
